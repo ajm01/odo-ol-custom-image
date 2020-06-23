@@ -1,0 +1,30 @@
+FROM ajymau/ubi-maven:0.3.1 AS builder
+RUN  groupadd --gid 1000 java_group \
+  && useradd --uid 1000 --gid java_group --shell /bin/bash --create-home java_user \
+#  && mkdir -p /mvn/repository \
+#  && chown -R java_user:java_group /mvn \
+  && mkdir -p /opt/ol \
+  && chown -R java_user:java_group /opt \
+  && mkdir -p /stacks/java-openliberty/stackfiles/util \
+  && chown -R java_user:java_group /stacks/java-openliberty/stackfiles/util
+
+RUN chmod -R 777 /stacks/java-openliberty/stackfiles
+
+COPY ./LICENSE /licenses/
+COPY --chown=java_user:java_group ./project/pom.xml /stacks/java-openliberty/stackfiles
+COPY --chown=java_user:java_group ./project/util /stacks/java-openliberty/stackfiles/util/
+
+RUN  /stacks/java-openliberty/stackfiles/util/check_version build
+
+WORKDIR /stacks/java-openliberty/stackfiles
+USER java_user
+RUN mvn -B -Pstack-image-package liberty:create liberty:install-server liberty:install-feature dependency:go-offline
+RUN chmod -R 777 /opt/ol
+RUN chmod -R 777 /home/java_user/.m2/repository
+
+FROM ajymau/ubi-maven:0.3.1
+RUN mkdir -p /opt/ol
+#WORKDIR /root
+COPY --from=builder /home/java_user/.m2 /root/.m2
+#WORKDIR /
+COPY --from=builder /opt/ol /opt/ol
